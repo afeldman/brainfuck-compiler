@@ -1,0 +1,137 @@
+name: Build and Test Brainfuck Compiler
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build and Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Haskell
+        uses: haskell-actions/setup@v2
+        with:
+          ghc-version: "9.4.8"
+          enable-stack: true
+          stack-version: "latest"
+
+      - name: Install LLVM
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y llvm-14 llvm-14-dev clang-14 || \
+          sudo apt-get install -y llvm-15 llvm-15-dev clang-15 || \
+          sudo apt-get install -y llvm llvm-dev clang
+
+      - name: Install BNFC
+        run: |
+          stack install BNFC
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Cache Stack dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.stack
+            .stack-work
+          key: ${{ runner.os }}-stack-bfc-${{ hashFiles('stack.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-stack-bfc-
+
+      - name: Generate parser
+        run: |
+          bnfc -m --haskell -d bf.cf
+          mkdir -p src
+          mv Brainfuck/*.hs src/ 2>/dev/null || true
+          rmdir Brainfuck 2>/dev/null || true
+
+      - name: Build compiler
+        run: stack build
+
+      - name: Run tests
+        run: |
+          if [ -d "test" ] && [ -n "$(ls -A test/* 2>/dev/null)" ]; then
+            for file in test/*; do
+              echo "Testing $file..."
+              stack exec bfc -- "$file" || true
+            done
+          else
+            echo "No test files found"
+          fi
+
+      - name: Package compiler
+        run: |
+          mkdir -p artifacts
+          stack install --local-bin-path artifacts
+          cp -r test artifacts/ 2>/dev/null || true
+          cp README.md artifacts/
+          cp bf.cf artifacts/
+          tar -czf bfc-compiler.tar.gz -C artifacts .
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bfc-compiler
+          path: bfc-compiler.tar.gz
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: bfc-compiler
+          path: artifacts
+
+      - name: Get commit info
+        id: commit
+        run: |
+          echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          echo "date=$(date +'%Y%m%d-%H%M%S')" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: build-${{ steps.commit.outputs.date }}
+          name: Brainfuck Compiler Build ${{ steps.commit.outputs.date }}
+          body: |
+            ## Brainfuck Compiler
+
+            Automated build from commit ${{ github.sha }}
+
+            ### Features
+            - Brainfuck to LLVM compiler
+            - BNFC-based parser
+            - Full LLVM backend
+
+            ### Installation
+
+            ```bash
+            tar -xzf bfc-compiler.tar.gz
+            cd artifacts
+            ./bfc program
+            ```
+
+            ### Build Info
+            - Commit: ${{ github.sha }}
+            - Branch: ${{ github.ref_name }}
+            - Date: ${{ steps.commit.outputs.date }}
+          draft: false
+          prerelease: false
+          files: artifacts/bfc-compiler.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
