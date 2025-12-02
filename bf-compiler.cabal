@@ -1,0 +1,32 @@
+name:                bf-compiler
+version:             0.1.0.0
+synopsis:            Brainfuck to LLVM compiler
+description:         A simple Brainfuck compiler that generates LLVM IR
+homepage:            https://github.com/afeldman/acc
+license:             MIT
+author:              Anton Feldmann
+maintainer:          anton.feldmann@gmail.com
+category:            Compiler
+build-type:          Simple
+cabal-version:       >=1.10
+
+executable bfc
+  main-is:             Main.hs
+  other-modules:       AbsBF
+                     , LexBF
+                     , ParBF
+                     , PrintBF
+                     , SkelBF
+                     , ErrM
+                     , CodeGen
+                     , LLVM
+  build-depends:       base >=4.7 && <5
+                     , llvm-hs >= 9.0 && < 10
+                     , llvm-hs-pure >= 9.0 && < 10
+                     , llvm-hs-pretty >= 0.9
+                     , mtl >= 2.2
+                     , bytestring >= 0.10
+                     , array >= 0.5
+  hs-source-dirs:      src
+  default-language:    Haskell2010
+  ghc-options:         -Wall -O2

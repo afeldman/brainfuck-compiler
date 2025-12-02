@@ -1,0 +1,17 @@
+BFGrammar . BF ::= [Stm];
+
+SIncrement. Stm ::= ">" ;
+SDecrement. Stm ::= "<" ;
+SIncBytAtP. Stm ::= "+" ;
+SDecBytAtP. Stm ::= "-" ;
+SOutput.    Stm ::= "." ;
+SInput.     Stm ::= "," ;
+SWhile.     Stm ::= "[" [Stm] "]";
+
+[].    [Stm] ::= ;
+(:[]). [Stm] ::= Stm ;
+(:).   [Stm] ::= Stm [Stm] ;
+
+
+comment "-" ;
+comment "{-" "-}";

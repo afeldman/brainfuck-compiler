@@ -1,0 +1,97 @@
+name: Test Compilers
+
+on:
+    pull_request:
+        branches: [main, master]
+    workflow_dispatch:
+
+jobs:
+    test-brainfuck:
+        name: Test Brainfuck Examples
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Setup Haskell
+              uses: haskell-actions/setup@v2
+              with:
+                  ghc-version: "9.4.8"
+                  enable-stack: true
+                  stack-version: "latest"
+
+            - name: Install LLVM
+              run: |
+                  sudo apt-get update
+                  sudo apt-get install -y llvm-14 llvm-14-dev libllvm14 clang-14 || \
+                  sudo apt-get install -y llvm-15 llvm-15-dev libllvm15 clang-15 || \
+                  sudo apt-get install -y llvm llvm-dev clang
+
+            - name: Install BNFC
+              run: |
+                  stack install BNFC
+                  echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+            - name: Install Task
+              run: |
+                  sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b /usr/local/bin
+
+            - name: Build Brainfuck Compiler
+              run: |
+                  task build:bf
+
+            - name: Test all Brainfuck examples
+              working-directory: bf
+              run: |
+                  for bf_file in test/*.bf; do
+                    echo "Testing $bf_file..."
+                    basename=$(basename "$bf_file" .bf)
+                    stack exec bfc -- "$bf_file" -emit-llvm -o "${basename}.ll"
+                    llc -filetype=obj "${basename}.ll" -o "${basename}.o" || llc-14 -filetype=obj "${basename}.ll" -o "${basename}.o" || llc-15 -filetype=obj "${basename}.ll" -o "${basename}.o"
+                    clang "${basename}.o" -o "${basename}" || clang-14 "${basename}.o" -o "${basename}" || clang-15 "${basename}.o" -o "${basename}"
+                    echo "Compiled successfully: ${basename}"
+                  done
+
+    test-whitespace:
+        name: Test Whitespace Examples
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Setup Haskell
+              uses: haskell-actions/setup@v2
+              with:
+                  ghc-version: "9.4.8"
+                  enable-stack: true
+                  stack-version: "latest"
+
+            - name: Install LLVM
+              run: |
+                  sudo apt-get update
+                  sudo apt-get install -y llvm-14 llvm-14-dev libllvm14 clang-14 || \
+                  sudo apt-get install -y llvm-15 llvm-15-dev libllvm15 clang-15 || \
+                  sudo apt-get install -y llvm llvm-dev clang
+
+            - name: Install BNFC
+              run: |
+                  stack install BNFC
+                  echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+            - name: Build Whitespace Compiler
+              run: |
+                  task build:ws
+
+            - name: Test all Whitespace examples
+              working-directory: whitespace
+              run: |
+                  for ws_file in test/*.ws; do
+                    echo "Testing $ws_file..."
+                    basename=$(basename "$ws_file" .ws)
+                    stack exec wsc -- "$ws_file" -emit-llvm -o "${basename}.ll"
+                    llc -filetype=obj "${basename}.ll" -o "${basename}.o" || llc-14 -filetype=obj "${basename}.ll" -o "${basename}.o" || llc-15 -filetype=obj "${basename}.ll" -o "${basename}.o"
+                    clang "${basename}.o" -o "${basename}" || clang-14 "${basename}.o" -o "${basename}" || clang-15 "${basename}.o" -o "${basename}"
+                    echo "Compiled successfully: ${basename}"
+                  done
